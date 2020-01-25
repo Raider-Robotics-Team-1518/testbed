@@ -23,6 +23,13 @@ import frc.robot.components.LimeLight;
 import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.interfaces.Gyro;
 
+import edu.wpi.first.wpilibj.I2C;
+import edu.wpi.first.wpilibj.util.Color;
+import com.revrobotics.ColorSensorV3;
+import com.revrobotics.ColorMatchResult;
+import com.revrobotics.ColorMatch;
+
+
 /**
  * This is a demo program showing how to use Mecanum control with the RobotDrive
  * class.
@@ -35,6 +42,14 @@ public class Robot extends TimedRobot {
   private static final int kThrowerMotor = 4;
 
   private static final int kJoystickChannel = 0;
+
+  private final I2C.Port i2cPort = I2C.Port.kOnboard;
+  private final ColorSensorV3 m_colorSensor = new ColorSensorV3(i2cPort);
+  private final ColorMatch m_colorMatcher = new ColorMatch();
+  private final Color kBlueTarget = ColorMatch.makeColor(0, 1, 1);
+  private final Color kGreenTarget = ColorMatch.makeColor(0, 1, 0);
+  private final Color kRedTarget = ColorMatch.makeColor(1, 0, 0);
+  private final Color kYellowTarget = ColorMatch.makeColor(1, 1, 0);
 
   private CANEncoder m_encoder;
 
@@ -70,6 +85,34 @@ public class Robot extends TimedRobot {
     rioGyro.calibrate();
     rioGyro.reset();
 
+    m_colorMatcher.addColorMatch(kBlueTarget);
+    m_colorMatcher.addColorMatch(kGreenTarget);
+    m_colorMatcher.addColorMatch(kRedTarget);
+    m_colorMatcher.addColorMatch(kYellowTarget);
+
+    Color detectedColor = m_colorSensor.getColor();
+
+    String colorString;
+    ColorMatchResult match = m_colorMatcher.matchClosestColor(detectedColor);
+
+    if (match.color == kBlueTarget) {
+      colorString = "Blue";
+    } else if (match.color == kRedTarget) {
+      colorString = "Red";
+    } else if (match.color == kGreenTarget) {
+      colorString = "Green";
+    } else if (match.color == kYellowTarget) {
+      colorString = "Yellow";
+    } else {
+      colorString = "Unknown";
+    }
+
+    SmartDashboard.putNumber("Red", detectedColor.red);
+    SmartDashboard.putNumber("Green", detectedColor.green);
+    SmartDashboard.putNumber("Blue", detectedColor.blue);
+    SmartDashboard.putNumber("Confidence", match.confidence);
+    SmartDashboard.putString("Detected Color", colorString);
+
     // Invert the left side motors.
     // You may need to change or remove this to match your robot.
     // frontLeft.setInverted(true);
@@ -79,7 +122,7 @@ public class Robot extends TimedRobot {
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
 
-    m_stick = new Joystick(kJoystickChannel);
+    m_stick = new Joystick(kJoystickChannel); 
 
     lime.init("limelight");
   }
