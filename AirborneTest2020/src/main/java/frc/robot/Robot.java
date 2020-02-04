@@ -7,7 +7,8 @@
 
 package frc.robot;
 
-import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
+import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
+// import com.ctre.phoenix.sensors.CANCoder;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANEncoder;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
@@ -35,60 +36,155 @@ import com.revrobotics.ColorMatch;
  * class.
  */
 public class Robot extends TimedRobot {
-  private static final int kFrontLeftChannel = 5;
-  private static final int kRearLeftChannel = 6;
-  private static final int kFrontRightChannel = 10;
-  private static final int kRearRightChannel = 9;
-  private static final int kThrowerMotor = 4;
+  private static final int kFrontLeftChannel = 1;
+  private static final int kRearLeftChannel = 2;
+  private static final int kFrontRightChannel = 3;
+  private static final int kRearRightChannel = 4;
+  private static final int kThrowerMotor = 11;
+  // private static final int kThrowerMotor2 = 2;
 
   private static final int kJoystickChannel = 0;
 
   private final I2C.Port i2cPort = I2C.Port.kOnboard;
   private final ColorSensorV3 m_colorSensor = new ColorSensorV3(i2cPort);
   private final ColorMatch m_colorMatcher = new ColorMatch();
-  private final Color kBlueTarget = ColorMatch.makeColor(0, 1, 1);
-  private final Color kGreenTarget = ColorMatch.makeColor(0, 1, 0);
-  private final Color kRedTarget = ColorMatch.makeColor(1, 0, 0);
-  private final Color kYellowTarget = ColorMatch.makeColor(1, 1, 0);
+  private final Color kBlueTarget = ColorMatch.makeColor(0.129, .428, .443);
+  private final Color kGreenTarget = ColorMatch.makeColor(.172, .577, .251);
+  private final Color kRedTarget = ColorMatch.makeColor(.519, .347, .133);
+  private final Color kYellowTarget = ColorMatch.makeColor(.319, .558, .124);
+
+  private final WPI_TalonFX frontLeft = new WPI_TalonFX(kFrontLeftChannel);
+  private final WPI_TalonFX rearLeft = new WPI_TalonFX(kRearLeftChannel);
+  private final WPI_TalonFX frontRight = new WPI_TalonFX(kFrontRightChannel);
+  private final WPI_TalonFX rearRight = new WPI_TalonFX(kRearRightChannel);
 
   private CANEncoder m_encoder;
+  // private CANEncoder m_encoder2;
 
   private MecanumDrive m_robotDrive;
   private Joystick m_stick;
   private LimeLight lime = new LimeLight();
 
-  public static boolean DriveByStick = false;
+  public static boolean DriveByStick = true;
   public JoystickButton btnDriveMode;
 
   private static final double targetHeight = 18; // Inches
   private static final double optimalDistance = 84; // Inches
 
+  private static final double clicksPerMotorRotation = 2048.0;
+  private static final double gearRatio = 10.71;
+  private static final double clicksPerWheelRotation = 21934.08;
+  private static final double wheelCircumference = 25.0;
+  private static final double autoModeTargetDistance = clicksPerWheelRotation / wheelCircumference * 12 * 3;  // 3 ft
+  
+
   public static Gyro rioGyro = new ADXRS450_Gyro();
 
   private CANSparkMax throwerMotor1;
+  // private CANSparkMax throwerMotor2;
 
   @Override
   public void robotInit() {
 
     btnDriveMode = new JoystickButton(m_stick, 11);
-    WPI_TalonSRX frontLeft = new WPI_TalonSRX(kFrontLeftChannel);
-    WPI_TalonSRX rearLeft = new WPI_TalonSRX(kRearLeftChannel);
-    WPI_TalonSRX frontRight = new WPI_TalonSRX(kFrontRightChannel);
-    WPI_TalonSRX rearRight = new WPI_TalonSRX(kRearRightChannel);
 
     throwerMotor1 = new com.revrobotics.CANSparkMax(kThrowerMotor, MotorType.kBrushless);
 
     throwerMotor1.restoreFactoryDefaults();
 
     m_encoder = throwerMotor1.getEncoder();
+    // m_encoder2 = throwerMotor2.getEncoder();
 
     rioGyro.calibrate();
     rioGyro.reset();
+
+    // Invert the left side motors.
+    // You may need to change or remove this to match your robot.
+    // frontLeft.setInverted(true);
+    // rearLeft.setInverted(true);
+    // frontRight.setInverted(true);
+    // rearRight.setInverted(true);
+
+    // TODO: These are not correct. Goal is to have all count
+    // positive/up at the bot drives forward
+    frontLeft.setSensorPhase(false);
+    frontRight.setSensorPhase(true);
+    rearLeft.setSensorPhase(false);
+    rearRight.setSensorPhase(true);
+    
+    frontLeft.setSelectedSensorPosition(0);
+    frontRight.setSelectedSensorPosition(0);
+    rearLeft.setSelectedSensorPosition(0);
+    rearRight.setSelectedSensorPosition(0);
 
     m_colorMatcher.addColorMatch(kBlueTarget);
     m_colorMatcher.addColorMatch(kGreenTarget);
     m_colorMatcher.addColorMatch(kRedTarget);
     m_colorMatcher.addColorMatch(kYellowTarget);
+
+    m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
+
+    m_stick = new Joystick(kJoystickChannel); 
+
+    lime.init("limelight");
+  }
+
+  @Override
+  public void autonomousInit() {
+    super.autonomousInit();
+    frontLeft.setSelectedSensorPosition(0);
+    frontRight.setSelectedSensorPosition(0);
+    rearLeft.setSelectedSensorPosition(0);
+    rearRight.setSelectedSensorPosition(0);
+  }
+
+  @Override
+  public void teleopInit() {
+    super.teleopInit();
+
+    frontLeft.setSelectedSensorPosition(0);
+    frontRight.setSelectedSensorPosition(0);
+    rearLeft.setSelectedSensorPosition(0);
+    rearRight.setSelectedSensorPosition(0);
+  }
+
+@Override
+public void autonomousPeriodic() {
+  super.autonomousPeriodic();
+  double flSP = frontLeft.getSelectedSensorPosition();
+  double frSP = frontRight.getSelectedSensorPosition();
+  double rlSP = rearLeft.getSelectedSensorPosition();
+  double rrSP = rearRight.getSelectedSensorPosition();
+  SmartDashboard.putNumber("mFL", flSP);
+  SmartDashboard.putNumber("mFR", frSP);
+  SmartDashboard.putNumber("mRL", rlSP);
+  SmartDashboard.putNumber("mRR", rrSP);
+
+  if ( (flSP + frSP)/2 < autoModeTargetDistance) {
+    m_robotDrive.driveCartesian(0.0, 0.25, 0.0, 0.0);
+  }
+}
+
+
+  @Override
+  public void teleopPeriodic() {
+
+    // Thrower Motor by the Throttle
+    throwerMotor1.set(m_stick.getThrottle());
+    SmartDashboard.putNumber("Thrower Throttle", m_stick.getThrottle());
+    // Use button 11 to change drive mode (joystick or LimeLight)
+    // btnDriveMode.whenPressed(new ChangeDrive());
+
+    // Use the joystick X axis for lateral movement, Y axis for forward
+    // movement, and Z axis for rotation.
+    // SmartDashboard.putNumber("Gyro Angle", rioGyro.getAngle());
+
+    SmartDashboard.putNumber("Thrower Velocity", m_encoder.getVelocity());
+
+    SmartDashboard.putNumber("mFL", frontLeft.getSelectedSensorPosition());
+    SmartDashboard.putNumber("mFR", frontRight.getSelectedSensorPosition());
+    SmartDashboard.putNumber("mRL", rearLeft.getSelectedSensorPosition());
+    SmartDashboard.putNumber("mRR", rearRight.getSelectedSensorPosition());
 
     Color detectedColor = m_colorSensor.getColor();
 
@@ -107,48 +203,20 @@ public class Robot extends TimedRobot {
       colorString = "Unknown";
     }
 
-    SmartDashboard.putNumber("Red", detectedColor.red);
-    SmartDashboard.putNumber("Green", detectedColor.green);
-    SmartDashboard.putNumber("Blue", detectedColor.blue);
-    SmartDashboard.putNumber("Confidence", match.confidence);
-    SmartDashboard.putString("Detected Color", colorString);
+    SmartDashboard.putNumber("xRed", detectedColor.red);
+    SmartDashboard.putNumber("xGreen", detectedColor.green);
+    SmartDashboard.putNumber("xBlue", detectedColor.blue);
+    SmartDashboard.putNumber("xConfidence", match.confidence);
+    SmartDashboard.putString("xDetected Color", colorString);
+    // SmartDashboard.putString("Match", match.color);
 
-    // Invert the left side motors.
-    // You may need to change or remove this to match your robot.
-    // frontLeft.setInverted(true);
-    // rearLeft.setInverted(true);
-    // frontRight.setInverted(true);
-    // rearRight.setInverted(true);
-
-    m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
-
-    m_stick = new Joystick(kJoystickChannel); 
-
-    lime.init("limelight");
-  }
-
-  @Override
-  public void teleopPeriodic() {
-
-    // Thrower Motor by the Throttle
-    throwerMotor1.set(m_stick.getThrottle());
-    SmartDashboard.putNumber("Thrower Throttle", m_stick.getThrottle());
-    // Use button 11 to change drive mode (joystick or LimeLight)
-    // btnDriveMode.whenPressed(new ChangeDrive());
-
-    // Use the joystick X axis for lateral movement, Y axis for forward
-    // movement, and Z axis for rotation.
-    // SmartDashboard.putNumber("Gyro Angle", rioGyro.getAngle());
-
-    SmartDashboard.putNumber("Thrower Velocity", m_encoder.getVelocity());
-
-    if (true || DriveByStick) {
+    if (DriveByStick) {
       m_robotDrive.driveCartesian(Math.pow(m_stick.getX(), 3) * .75, Math.pow(-m_stick.getY(), 3) * 1,
           Math.pow(m_stick.getZ(), 3) * .5, 0.0);
     } else {
       Double horizontalOffset = lime.getTargetOffsetHorizontal();
       Double verticalOffset = lime.getTargetOffsetVertical();
-      Double targetArea = lime.getTargetArea();
+      // Double targetArea = lime.getTargetArea();
 
       Double minPowerFloor = 0.25;
       Double newX = 0.0;
@@ -188,3 +256,5 @@ public class Robot extends TimedRobot {
   }
 
 }
+
+// 10.71:1 gear ratio
