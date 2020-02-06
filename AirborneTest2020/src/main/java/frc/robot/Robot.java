@@ -9,6 +9,8 @@ package frc.robot;
 
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
 // import com.ctre.phoenix.sensors.CANCoder;
+import com.ctre.phoenix.motorcontrol.NeutralMode;
+
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANEncoder;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
@@ -16,6 +18,7 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 import edu.wpi.first.wpilibj.Joystick;
 //import edu.wpi.first.wpilibj.PWMVictorSPX;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.buttons.JoystickButton;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 // import edu.wpi.first.wpilibj.livewindow.LiveWindow;
@@ -29,7 +32,6 @@ import edu.wpi.first.wpilibj.util.Color;
 import com.revrobotics.ColorSensorV3;
 import com.revrobotics.ColorMatchResult;
 import com.revrobotics.ColorMatch;
-
 
 /**
  * This is a demo program showing how to use Mecanum control with the RobotDrive
@@ -75,8 +77,9 @@ public class Robot extends TimedRobot {
   private static final double gearRatio = 10.71;
   private static final double clicksPerWheelRotation = 21934.08;
   private static final double wheelCircumference = 25.0;
-  private static final double autoModeTargetDistance = clicksPerWheelRotation / wheelCircumference * 12 * 3;  // 3 ft
-  
+  private static final double autoModeTargetDistance = clicksPerWheelRotation / wheelCircumference * 12 * 3; // 3 ft
+
+  private static int driveDirection = 1;
 
   public static Gyro rioGyro = new ADXRS450_Gyro();
 
@@ -98,20 +101,6 @@ public class Robot extends TimedRobot {
     rioGyro.calibrate();
     rioGyro.reset();
 
-    // Invert the left side motors.
-    // You may need to change or remove this to match your robot.
-    // frontLeft.setInverted(true);
-    // rearLeft.setInverted(true);
-    // frontRight.setInverted(true);
-    // rearRight.setInverted(true);
-
-    // TODO: These are not correct. Goal is to have all count
-    // positive/up at the bot drives forward
-    frontLeft.setSensorPhase(false);
-    frontRight.setSensorPhase(true);
-    rearLeft.setSensorPhase(false);
-    rearRight.setSensorPhase(true);
-    
     frontLeft.setSelectedSensorPosition(0);
     frontRight.setSelectedSensorPosition(0);
     rearLeft.setSelectedSensorPosition(0);
@@ -124,7 +113,7 @@ public class Robot extends TimedRobot {
 
     m_robotDrive = new MecanumDrive(frontLeft, rearLeft, frontRight, rearRight);
 
-    m_stick = new Joystick(kJoystickChannel); 
+    m_stick = new Joystick(kJoystickChannel);
 
     lime.init("limelight");
   }
@@ -136,6 +125,14 @@ public class Robot extends TimedRobot {
     frontRight.setSelectedSensorPosition(0);
     rearLeft.setSelectedSensorPosition(0);
     rearRight.setSelectedSensorPosition(0);
+
+    frontLeft.setNeutralMode(NeutralMode.Brake);
+    frontRight.setNeutralMode(NeutralMode.Brake);
+    rearLeft.setNeutralMode(NeutralMode.Brake);
+    rearRight.setNeutralMode(NeutralMode.Brake);
+
+    driveDirection = 1;
+
   }
 
   @Override
@@ -146,25 +143,50 @@ public class Robot extends TimedRobot {
     frontRight.setSelectedSensorPosition(0);
     rearLeft.setSelectedSensorPosition(0);
     rearRight.setSelectedSensorPosition(0);
+
+    frontLeft.setNeutralMode(NeutralMode.Coast);
+    frontRight.setNeutralMode(NeutralMode.Coast);
+    rearLeft.setNeutralMode(NeutralMode.Coast);
+    rearRight.setNeutralMode(NeutralMode.Coast);
   }
 
-@Override
-public void autonomousPeriodic() {
-  super.autonomousPeriodic();
-  double flSP = frontLeft.getSelectedSensorPosition();
-  double frSP = frontRight.getSelectedSensorPosition();
-  double rlSP = rearLeft.getSelectedSensorPosition();
-  double rrSP = rearRight.getSelectedSensorPosition();
-  SmartDashboard.putNumber("mFL", flSP);
-  SmartDashboard.putNumber("mFR", frSP);
-  SmartDashboard.putNumber("mRL", rlSP);
-  SmartDashboard.putNumber("mRR", rrSP);
+  @Override
+  public void autonomousPeriodic() {
+    super.autonomousPeriodic();
+    double flSP = frontLeft.getSelectedSensorPosition();
+    double frSP = frontRight.getSelectedSensorPosition();
+    double rlSP = rearLeft.getSelectedSensorPosition();
+    double rrSP = rearRight.getSelectedSensorPosition();
+    SmartDashboard.putNumber("mFL", flSP);
+    SmartDashboard.putNumber("mFR", frSP);
+    SmartDashboard.putNumber("mRL", rlSP);
+    SmartDashboard.putNumber("mRR", rrSP);
 
-  if ( (flSP + frSP)/2 < autoModeTargetDistance) {
-    m_robotDrive.driveCartesian(0.0, 0.25, 0.0, 0.0);
+    if (driveDirection == 1) {
+      if ((Math.abs(flSP) + Math.abs(frSP)) / 2 < autoModeTargetDistance) {
+        m_robotDrive.driveCartesian(0.0, 0.25, 0.0, 0.0);
+      } else {
+        m_robotDrive.stopMotor();
+        driveDirection = -1;
+        Timer.delay(.75);
+
+      }
+    }
+
+    else if (driveDirection == -1) {
+      if (((flSP) + -(frSP)) / 2 > 0) {
+        SmartDashboard.putNumber("mPosition", ((Math.abs(flSP) + Math.abs(frSP))/2));
+        m_robotDrive.driveCartesian(0.0, -0.25, 0.0, 0.0);
+      } else {
+        m_robotDrive.stopMotor();
+        driveDirection = 0;
+      }
+
+    }
+    else {
+      m_robotDrive.stopMotor();
+    }
   }
-}
-
 
   @Override
   public void teleopPeriodic() {
@@ -256,5 +278,3 @@ public void autonomousPeriodic() {
   }
 
 }
-
-// 10.71:1 gear ratio
