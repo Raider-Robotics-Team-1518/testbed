@@ -78,8 +78,10 @@ public class Robot extends TimedRobot {
   private static final double clicksPerWheelRotation = 21934.08;
   private static final double wheelCircumference = 25.0;
   private static final double autoModeTargetDistance = clicksPerWheelRotation / wheelCircumference * 12 * 3; // 3 ft
+  private static int delayTime = 1;
 
-  private static int driveDirection = 1;
+  private static int driveDirectionX = 1;
+  private static int driveDirectionY = 1;
 
   public static Gyro rioGyro = new ADXRS450_Gyro();
 
@@ -131,10 +133,27 @@ public class Robot extends TimedRobot {
     rearLeft.setNeutralMode(NeutralMode.Brake);
     rearRight.setNeutralMode(NeutralMode.Brake);
 
-    driveDirection = 1;
+    frontLeft.configOpenloopRamp(0.5);
+    frontRight.configOpenloopRamp(0.5);
+    rearLeft.configOpenloopRamp(0.5);
+    rearRight.configOpenloopRamp(0.5);
+
+    rioGyro.reset();
+
 
   }
 
+@Override
+  public void disabledInit() {
+    // TODO Auto-generated method stub
+    super.disabledInit();
+    frontLeft.setSelectedSensorPosition(0);
+    frontRight.setSelectedSensorPosition(0);
+    rearLeft.setSelectedSensorPosition(0);
+    rearRight.setSelectedSensorPosition(0);
+    driveDirectionY = 1;
+    driveDirectionX = 1;
+  }
   @Override
   public void teleopInit() {
     super.teleopInit();
@@ -162,29 +181,60 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("mRL", rlSP);
     SmartDashboard.putNumber("mRR", rrSP);
 
-    if (driveDirection == 1) {
+    if (driveDirectionX == 1) {
       if ((Math.abs(flSP) + Math.abs(frSP)) / 2 < autoModeTargetDistance) {
         m_robotDrive.driveCartesian(0.0, 0.25, 0.0, 0.0);
       } else {
         m_robotDrive.stopMotor();
-        driveDirection = -1;
-        Timer.delay(.75);
+        driveDirectionX = -1;
+        //Timer.delay(2);
 
       }
     }
 
-    else if (driveDirection == -1) {
+    else if (driveDirectionX == -1) {
       if (((flSP) + -(frSP)) / 2 > 0) {
-        SmartDashboard.putNumber("mPosition", ((Math.abs(flSP) + Math.abs(frSP))/2));
         m_robotDrive.driveCartesian(0.0, -0.25, 0.0, 0.0);
       } else {
         m_robotDrive.stopMotor();
-        driveDirection = 0;
+        driveDirectionX = 0;
       }
 
-    }
-    else {
+    } else {
       m_robotDrive.stopMotor();
+      //Timer.delay(delayTime);
+      //delayTime = 0;
+    }
+    if (driveDirectionX == 0) {
+      if (driveDirectionY == 1) {
+        if (((flSP) + -(rlSP)) /4 < autoModeTargetDistance) {
+          m_robotDrive.driveCartesian(0.25, 0.0, 0.0, 0.0);
+        } else {
+          m_robotDrive.stopMotor();
+          driveDirectionY = -1;
+          //Timer.delay(1);
+
+        }
+      }
+
+      else if (driveDirectionY == -1) {
+        if (((flSP) + -(rlSP)) /4 > 0) {
+          m_robotDrive.driveCartesian(-0.25, 0.0, 0.0, 0.0);
+        } else {
+          m_robotDrive.stopMotor();
+          driveDirectionY = 0;
+        }
+
+      } else {
+        m_robotDrive.stopMotor();
+      }
+      if (driveDirectionX == 0 && driveDirectionY == 0){
+        if (rioGyro.getAngle() < 360){
+          m_robotDrive.driveCartesian(0.0, 0.0, 0.25);
+        } else {
+          m_robotDrive.stopMotor();
+        }
+      }
     }
   }
 
